@@ -105,7 +105,7 @@ def main():
     full_path = os.path.join(dir_path, file)
     out_path = os.path.join(dir_path, out_file)
 
-    sell_scheme = 'LIFO'
+    sell_scheme = 'HIFO'
 
     new_header = ['Date Sold', 'Name', 'Coin Amount', 'Purchase Date', 'Cost Basis',  'Sell Price', 'Proceeds']
     out_lines = []
