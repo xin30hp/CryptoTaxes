@@ -46,9 +46,9 @@ def sort_buy_history(bought_dict, coin=None, sort='HIFO'):
     for coin_name, history in bought_dict.items():
         if coin == coin_name or coin is None:
             if sort == 'FIFO':
-                new_history = sorted(history, reverse=True)
+                new_history = sorted(history, reverse=False, key=lambda i: i[0])
             elif sort == 'LIFO':
-                new_history = sorted(history, reverse=False)
+                new_history = sorted(history, reverse=True, key=lambda i: i[0])
             elif sort == 'HIFO':
                 new_history = sorted(history, reverse=True, key=lambda i: i[2])
             else:
@@ -105,7 +105,7 @@ def main():
     full_path = os.path.join(dir_path, file)
     out_path = os.path.join(dir_path, out_file)
 
-    sell_scheme = 'HIFO'
+    sell_scheme = 'LIFO'
 
     new_header = ['Date Sold', 'Name', 'Coin Amount', 'Purchase Date', 'Cost Basis',  'Sell Price', 'Proceeds']
     out_lines = []
