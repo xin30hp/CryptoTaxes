@@ -33,6 +33,8 @@ def parse_buy_lines(buy_lines):
                 bought_dict[coin].append((date, amount, price_per_coin))
     return bought_dict
 
+def round_float(num):
+    return round(num, 11)
 
 def parse_date(date_string):
     return datetime.strptime(date_string, '%m/%d/%Y %H:%M:%S')
@@ -70,11 +72,12 @@ def sell_off_coins(coin_history, sell_date, to_sell_amount, sold_coin, sold_pric
         elif current_amount > to_sell_amount:
             cost_basis = price_per_coin * to_sell_amount
             recieved_money = sold_price_per_coin * to_sell_amount
-            proceeds = recieved_money - cost_basis
+            net = recieved_money - cost_basis
             num_coins = to_sell_amount
 
-            row_entry = [date_to_string(sell_date), sold_coin, num_coins, date_to_string(buy_date), cost_basis,  recieved_money, proceeds]
-            out_lines.append(row_entry)
+            if abs(net) > 0.01:
+                row_entry = [date_to_string(sell_date), sold_coin, round_float(num_coins), date_to_string(buy_date), round_float(cost_basis),  round_float(recieved_money), net]
+                out_lines.append(row_entry)
 
             new_tup = (buy_date, current_amount-to_sell_amount, price_per_coin)
             coin_history[idx] = new_tup
@@ -84,11 +87,12 @@ def sell_off_coins(coin_history, sell_date, to_sell_amount, sold_coin, sold_pric
         elif to_sell_amount >= current_amount:
             cost_basis = price_per_coin * current_amount
             recieved_money = sold_price_per_coin * current_amount
-            proceeds = recieved_money - cost_basis
+            net = recieved_money - cost_basis
             num_coins = current_amount
 
-            row_entry = [date_to_string(sell_date), sold_coin, num_coins, date_to_string(buy_date), cost_basis, recieved_money, proceeds]
-            out_lines.append(row_entry)
+            if abs(net) > 0.01:
+                row_entry = [date_to_string(sell_date), sold_coin, round_float(num_coins), date_to_string(buy_date), round_float(cost_basis), round_float(recieved_money), net]
+                out_lines.append(row_entry)
 
             new_tup = (buy_date, 0, price_per_coin)
             coin_history[idx] = new_tup
@@ -102,12 +106,14 @@ def main():
     dir_path = os.path.dirname(os.path.realpath(__file__))
     file = "transactions_HIFO_Universal.csv"
     out_file = "out.csv"
+    assets_file = "assets.csv"
     full_path = os.path.join(dir_path, file)
     out_path = os.path.join(dir_path, out_file)
+    assets_path = os.path.join(dir_path, assets_file)
 
     sell_scheme = 'HIFO'
 
-    new_header = ['Date Sold', 'Name', 'Coin Amount', 'Purchase Date', 'Cost Basis',  'Sell Price', 'Proceeds']
+    new_header = ['Date Sold', 'Name', 'Coin Amount', 'Purchase Date', 'Cost Basis',  'Proceeds', 'Net', 'LTCG_First_%s' % sell_scheme]
     out_lines = []
     out_lines.append(new_header)
 
@@ -159,9 +165,33 @@ def main():
     
     with open(out_path, 'w') as f:
         for line in out_lines:
+            str_out = ''
             for x in line:
-                f.write('%s,' % x)
-            f.write('\n')
+                str_out += '%s,' % x
+            
+            str_out = str_out[:-1]
+            str_out += '\n'
+            f.write(str_out)
+
+
+    asset_lines = [['Name', 'Purchase Date', 'Current Held', 'Price Per Coin']]
+    for coin_type in bought_dict:
+        for buy_transaction in bought_dict[coin_type]:
+            buy_date = buy_transaction[0]
+            current_amount = buy_transaction[1]
+            price_per_coin = buy_transaction[2]
+            row_entry = [coin_type, buy_date, round_float(current_amount), round_float(price_per_coin)]
+            asset_lines.append(row_entry)
+
+    with open(assets_path, 'w') as f:
+        for line in asset_lines:
+            str_out = ''
+            for x in line:
+                str_out += '%s,' % x
+            
+            str_out = str_out[:-1]
+            str_out += '\n'
+            f.write(str_out)
 
 if __name__ == "__main__":
     main()
