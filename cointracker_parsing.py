@@ -37,11 +37,21 @@ def round_float(num):
     return round(num, 11)
 
 def parse_date(date_string):
-    return datetime.strptime(date_string, '%m/%d/%Y %H:%M:%S')
-
+    try:
+        return datetime.strptime(date_string, '%m/%d/%Y %H:%M:%S')
+    except:
+        return datetime.strptime(date_string, '%m/%d/%Y')
 
 def date_to_string(datetime_date):
-    return datetime.strftime(datetime_date, '%m/%d/%Y %H:%M:%S')
+    # print(datetime_date)
+    # print(hasattr(datetime_date, 'second'))
+    # print(getattr(datetime_date, 'second'))
+    
+    # if datetime_date.second == 0 and datetime_date.minute == 0 and datetime_date.hour == 0:
+    if not hasattr(datetime_date, 'second'):
+        return datetime.strftime(datetime_date, '%m/%d/%Y')
+    else:
+        return datetime.strftime(datetime_date, '%m/%d/%Y %H:%M:%S')
 
 
 def sort_buy_history(bought_dict, coin=None, sort='HIFO'):
@@ -111,9 +121,13 @@ def main():
     out_path = os.path.join(dir_path, out_file)
     assets_path = os.path.join(dir_path, assets_file)
 
-    sell_scheme = 'HIFO'
+    out_collapsed_file = "out_collapsed.csv"
+    out_collapsed_path = os.path.join(dir_path, out_collapsed_file)
 
-    new_header = ['Date Sold', 'Name', 'Coin Amount', 'Purchase Date', 'Cost Basis',  'Proceeds', 'Net', 'LTCG_First_%s' % sell_scheme]
+    sell_scheme = 'HIFO'
+    force_ltcg = False
+
+    new_header = ['Date Sold', 'Name', 'Coin Amount', 'Purchase Date', 'Cost Basis',  'Proceeds', 'Net', 'ForceLTCG_%s' % force_ltcg, 'Scheme_%s' % sell_scheme]
     out_lines = []
     out_lines.append(new_header)
 
@@ -125,6 +139,7 @@ def main():
     for line in sell_lines:
         if line[4] == 'USD' and line[4] != '':
             sell_date = parse_date(line[0])
+
             sold_coin = line[12]
             sold_amount = float(line[11])
             usd_recieved = float(line[3])
@@ -141,7 +156,7 @@ def main():
 
                 if buy_date >= sell_date:
                     future_list.append(tup)
-                elif buy_date >= sell_date - relativedelta(years=1, days=1):
+                elif force_ltcg and (buy_date >= sell_date - relativedelta(years=1, days=1)):
                     stcg_list.append(tup)
                 else:
                     ltcg_list.append(tup)
@@ -160,11 +175,100 @@ def main():
             bought_dict[sold_coin] = future_list + stcg_list + ltcg_list
             bought_dict = sort_buy_history(bought_dict, coin=sold_coin, sort=sell_scheme)
 
-    for line in out_lines:
-        print(line)
+    # for line in out_lines:
+    #     print(line)
+    # Check last line
+    # if last line shares buy Date, sell Date, buy price per coin, sell price per coin. last line and current line
+    # 
+    # when current line is different from last line, add current line to new_lines
+
+    # when no more lines, add current line to new_lines
+    def check_line_match(line1, line2):
+        coin_type1 = line1[1]
+        coin_type2 = line2[1]
+        if coin_type1 != coin_type2:
+            print('diff coins')
+            return False
+
+        sell_date1 = parse_date(line1[0])
+        sell_date2 = parse_date(line2[0])
+        if sell_date1.date() != sell_date2.date():
+            print('diff sell_date1')
+            return False
+
+        buy_date1 = parse_date(line1[3])
+        buy_date2 = parse_date(line2[3])
+        if buy_date1.date() != buy_date2.date():
+            print('diff buy_date1')
+            return False
+
+        num_coin1 = line1[2]
+        num_coin2 = line2[2]
+
+        ppc_buy_1 = line1[4] / num_coin1
+        ppc_buy_2 = line2[4] / num_coin2
+        if not (ppc_buy_1 > (ppc_buy_2*.99) and ppc_buy_1 < (ppc_buy_2*1.01)):
+            print('diff ppc_buy_1')
+            print(round(ppc_buy_1, 1), round(ppc_buy_2, 1))
+            print(ppc_buy_1 > (ppc_buy_2*.99), ppc_buy_1, (ppc_buy_2*.99))
+           # print(ppc_buy_1 > (ppc_buy_2*.99), ppc_buy_1, (ppc_buy_2*.99))
+            return False
+
+        ppc_sell_1 = line1[5] / num_coin1
+        ppc_sell_2 = line2[5] / num_coin2
+        if not (ppc_sell_1 > (ppc_sell_2*.999) and ppc_sell_1 < (ppc_sell_2*1.001)):
+            print('diff ppc_sell_1')
+            print(round(ppc_sell_1, 1), round(ppc_sell_2, 1))
+            return False
+
+        return True
+
     
+    def merge_lines(line1, line2):
+        new_line = line1
+        new_line[0] = date_to_string(parse_date(line1[0]).date())
+        new_line[2] = line1[2] + line2[2]
+        new_line[3] = date_to_string(parse_date(line1[3]).date())
+        new_line[4] = line1[4] + line2[4]
+        new_line[5] = line1[5] + line2[5]
+        new_line[6] = line1[6] + line2[6]
+
+        return new_line
+
+    def collapse_lines(original_lines):
+        new_lines = []
+        previous_line = None
+        for line in original_lines:
+            current_line = line
+            if previous_line is None:
+                pass
+            else:
+                if check_line_match(previous_line, current_line):
+                    current_line = merge_lines(previous_line, current_line)
+                else:
+                    new_lines.append(previous_line)
+            previous_line = current_line
+        new_lines.append(previous_line)
+        return new_lines
+
+
+# row_entry = [date_to_string(sell_date), sold_coin, round_float(num_coins), date_to_string(buy_date), round_float(cost_basis), round_float(recieved_money), net]
+
+
     with open(out_path, 'w') as f:
         for line in out_lines:
+            str_out = ''
+            for x in line:
+                str_out += '%s,' % x
+            
+            str_out = str_out[:-1]
+            str_out += '\n'
+            f.write(str_out)
+
+
+    collapsed_lines = collapse_lines(out_lines)
+    with open(out_collapsed_path, 'w') as f:
+        for line in collapsed_lines:
             str_out = ''
             for x in line:
                 str_out += '%s,' % x
